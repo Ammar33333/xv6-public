@@ -162,6 +162,8 @@ runcmd(struct cmd *cmd)
     break;
   }
   exit();
+
+  return;
 }
 
 int getcmd(char *buf, int nbuf)
