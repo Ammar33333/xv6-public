@@ -4,6 +4,40 @@
 #include "user.h"
 #include "fcntl.h"
 
+#define HIST 20
+static char history[HIST][128];
+static int hcount = 0;
+
+static void addhist(const char *line){
+  int idx = hcount % HIST;
+  int i=0; for(i=0; i<127 && line[i]; i++) history[idx][i]=line[i];
+  history[idx][i]=0; hcount++;
+}
+static void printhist(void){
+  int start = hcount > HIST ? hcount - HIST : 0;
+  for(int n = start; n < hcount; n++){
+    int idx = n % HIST;
+    printf(1, "%d %s\n", n+1, history[idx]);
+  }
+}
+static int expand_bang(char *buf, int nbuf){
+  if(buf[0] != '!') return 0;
+  if(hcount == 0){ printf(1, "no history\n"); return -1; }
+  if(buf[1] == '!'){
+    int idx = (hcount - 1) % HIST;
+    int i=0; for(i=0;i<nbuf-1 && history[idx][i];i++) buf[i]=history[idx][i];
+    buf[i]=0; return 1;
+  }
+  int num=0;
+  for(int i=1; buf[i]; i++){
+    if(buf[i]<'0'||buf[i]>'9'){ printf(1,"bad !n\n"); return -1; }
+    num = num*10 + (buf[i]-'0');
+  }
+  if(num<1 || num>hcount){ printf(1,"no such command\n"); return -1; }
+  int idx=(num-1)%HIST; int i=0; for(i=0;i<nbuf-1 && history[idx][i];i++) buf[i]=history[idx][i];
+  buf[i]=0; return 1;
+}
+
 // Parsed command representation
 #define EXEC  1
 #define REDIR 2
@@ -130,16 +164,31 @@ runcmd(struct cmd *cmd)
   exit();
 }
 
-int
-getcmd(char *buf, int nbuf)
+int getcmd(char *buf, int nbuf)
 {
   printf(2, "$ ");
   memset(buf, 0, nbuf);
-  gets(buf, nbuf);
-  if(buf[0] == 0) // EOF
-    return -1;
+  if(gets(buf, nbuf) == 0) return -1;
+
+  int len = strlen(buf);
+  if(len > 0 && buf[len-1] == '\n') buf[len-1] = 0;
+
+  if(strcmp(buf, "history") == 0){
+    printhist();
+    buf[0] = 0;
+    return 0;
+  }
+
+  if(buf[0] == '!'){
+    int r = expand_bang(buf, nbuf);
+    if(r < 0){ buf[0]=0; return 0; }
+    if(r > 0) printf(1, "%s\n", buf);
+  }
+
+  if(buf[0]) addhist(buf);
   return 0;
 }
+
 
 int
 main(void)
